@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSE Industry Performance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            color: white;
+            backdrop-filter: blur(4px);
+        }
+        .card-hover {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .gradient-text {
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .performance-gradient {
+            background-image: linear-gradient(to right, #3b82f6, #10b981, #ef4444);
+        }
+        .skeleton-row {
+            height: 56px;
+        }
+        .chart-tooltip {
+            background: rgba(0, 0, 0, 0.8) !important;
+            border-radius: 0.375rem !important;
+            padding: 0.5rem !important;
+            border: none !important;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+        }
+        .chart-container canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .sticky-nav {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            backdrop-filter: blur(8px);
+        }
+        .back-to-top {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 30;
+            transition: all 0.3s ease;
+        }
+        .back-to-top:hover {
+            transform: translateY(-3px);
+        }
+        .dropdown-arrow {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.25em;
+        }
+        .stock-table-container {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans antialiased">
+    <!-- Navigation Bar -->
+    <nav class="sticky-nav bg-indigo-600/90 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center">
+                <i class="fas fa-chart-line mr-2"></i>
+                <span>NSE Dashboards</span>
+            </h1>
+            <div class="flex space-x-4">
+                <a href="/index.html" class="hover:bg-indigo-700/80 px-3 py-1.5 rounded-md transition flex items-center text-sm font-medium">
+                    <i class="fas fa-arrow-trend-up mr-1.5"></i>
+                    <span>Gainers/Losers</span>
+                </a>
+                <a href="/industry.html" class="bg-white/10 px-3 py-1.5 rounded-md text-sm font-medium flex items-center">
+                    <i class="fas fa-industry mr-1.5"></i>
+                    <span>Industry Performance</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <header class="text-center mb-10 animate-fade-in">
+            <div class="inline-block bg-white rounded-xl shadow-sm px-4 py-2 mb-4">
+                <span class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Industry Analytics</span>
+            </div>
+            <h1 class="text-4xl font-bold text-gray-800 mb-3">NSE <span class="performance-gradient gradient-text">Industry Performance</span></h1>
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto">Simple average % change by industry (equal weights)</p>
+            
+            <div class="flex justify-center mt-6">
+                <div class="bg-white rounded-lg shadow-sm p-2 inline-flex">
+                    <div class="flex items-center mr-4">
+                        <div class="w-2.5 h-2.5 rounded-full bg-green-500 mr-2"></div>
+                        <span class="text-xs text-gray-600">Live Market Data</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-2.5 h-2.5 rounded-full bg-blue-500 mr-2"></div>
+                        <span class="text-xs text-gray-600" id="lastUpdated">Last updated: --</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Controls -->
+        <div class="controls-container flex flex-wrap gap-4 mb-8 animate-fade-in">
+            <div class="flex-1 min-w-[200px]">
+                <label for="industryFilter" class="block text-sm font-medium text-gray-700 mb-1.5">Filter Industry</label>
+                <select id="industryFilter" class="block w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm dropdown-arrow py-2.5">
+                    <option value="all" selected>All Industries</option>
+                </select>
+            </div>
+            <div class="flex-1 min-w-[200px]">
+                <label for="sortToggle" class="block text-sm font-medium text-gray-700 mb-1.5">Sort By</label>
+                <select id="sortToggle" class="block w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm dropdown-arrow py-2.5">
+                    <option value="change-desc">Change (High to Low)</option>
+                    <option value="change-asc">Change (Low to High)</option>
+                    <option value="name">Industry Name (A-Z)</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button id="refreshBtn" class="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-medium py-2.5 px-5 rounded-lg transition flex items-center justify-center shadow-md hover:shadow-lg">
+                    <span id="refreshText">Refresh Data</span>
+                    <svg id="loadingSpinner" class="animate-spin h-4 w-4 ml-2 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div id="errorMessage" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 mb-6 animate-fade-in" role="alert">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-circle text-red-500 mt-1"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Error fetching data</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                        <p id="errorText"></p>
+                    </div>
+                    <div class="mt-4">
+                        <button id="retryBtn" type="button" class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                            Retry
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="cacheMessage" class="hidden bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 animate-fade-in" role="alert">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-info-circle text-blue-500 mt-1"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-blue-800">Information</h3>
+                    <div class="mt-2 text-sm text-blue-700">
+                        <p id="cacheText"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="symbolCountMessage" class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-6 animate-fade-in" role="alert">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-database text-indigo-500 mt-1"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-indigo-800">Data Status</h3>
+                    <div class="mt-2 text-sm text-indigo-700">
+                        <p id="symbolCountText">Loading industry data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8 animate-fade-in">
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                <div class="flex items-center">
+                    <div class="p-2 rounded-lg bg-green-100 text-green-600 mr-3">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Top Industry</h3>
+                        <p id="topIndustry" class="text-lg font-semibold text-gray-800 mt-1">--</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                <div class="flex items-center">
+                    <div class="p-2 rounded-lg bg-red-100 text-red-600 mr-3">
+                        <i class="fas fa-arrow-trend-down"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Worst Industry</h3>
+                        <p id="worstIndustry" class="text-lg font-semibold text-gray-800 mt-1">--</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                <div class="flex items-center">
+                    <div class="p-2 rounded-lg bg-blue-100 text-blue-600 mr-3">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Last Updated</h3>
+                        <p id="lastUpdatedTime" class="text-lg font-semibold text-gray-800 mt-1">--</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5 mb-6 shadow-sm card-hover animate-fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-chart-bar text-indigo-600 mr-2"></i>
+                    <span>Industry Performance Overview</span>
+                </h2>
+                <div class="text-sm text-gray-500">
+                    <span>Click bars for stock details</span>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="industryChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Stock Symbols Table -->
+        <div id="stocksTableContainer" class="hidden bg-white rounded-xl border border-gray-200 p-5 mb-6 shadow-sm animate-fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="stocksTableTitle" class="text-lg font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-table text-indigo-600 mr-2"></i>
+                    <span>Stocks</span>
+                </h3>
+                <button id="closeStocksTable" class="text-gray-400 hover:text-gray-600 transition">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="stock-table-container">
+                <table class="w-full text-left">
+                    <thead class="sticky top-0 bg-white">
+                        <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
+                            <th class="p-3 font-medium">Symbol</th>
+                            <th class="p-3 font-medium">Company</th>
+                            <th class="p-3 font-medium text-right">Change (%)</th>
+                            <th class="p-3 font-medium text-right">Price (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stocksTable" class="text-gray-700 divide-y divide-gray-200">
+                        <!-- Skeleton loading -->
+                        <tr><td colspan="4" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                        <tr><td colspan="4" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                        <tr><td colspan="4" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Back to Top Button -->
+        <button id="backToTop" class="back-to-top hidden bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:bg-indigo-700 transition">
+            <i class="fas fa-arrow-up"></i>
+        </button>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="flex flex-col items-center">
+            <div class="relative">
+                <svg class="animate-spin h-12 w-12 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <i class="fas fa-chart-pie text-white text-lg"></i>
+                </div>
+            </div>
+            <span class="mt-4 text-lg font-medium">Loading industry data...</span>
+            <p class="mt-2 text-sm opacity-80">This may take a few moments</p>
+        </div>
+    </div>
+
+    <footer class="bg-white border-t border-gray-200 py-6 mt-8">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>Data provided by NSE India. Market hours: 9:15 AM–3:30 PM IST, Monday–Friday</p>
+            <p class="mt-1">© 2023 NSE Dashboard. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Global variables
+        let industryChart;
+        let stockData = {};
+        let lastData = [];
+
+        // Format timestamp
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '--';
+            const date = new Date(timestamp);
+            return date.toLocaleString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+        }
+
+        // Fetch industry data
+        async function fetchIndustryData(forceRefresh = false) {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const refreshText = document.getElementById('refreshText');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const errorMessage = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+            const cacheMessage = document.getElementById('cacheMessage');
+            const cacheText = document.getElementById('cacheText');
+            const symbolCountMessage = document.getElementById('symbolCountMessage');
+            const symbolCountText = document.getElementById('symbolCountText');
+            const stocksTableContainer = document.getElementById('stocksTableContainer');
+
+            refreshBtn.disabled = true;
+            refreshText.textContent = 'Loading...';
+            loadingSpinner.classList.remove('hidden');
+            loadingOverlay.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+            cacheMessage.classList.add('hidden');
+            symbolCountMessage.classList.add('hidden');
+            stocksTableContainer.classList.add('hidden');
+
+            try {
+                const response = await axios.get(`/api/industry-data?refresh=${forceRefresh}`);
+                const industryData = response.data;
+                
+                if (!industryData.industries || industryData.industries.length === 0) {
+                    throw new Error(industryData.warning || 'No industry data available');
+                }
+                
+                lastData = industryData.industries;
+                stockData = {};
+                
+                // Store stock data for drill-down
+                lastData.forEach(item => {
+                    stockData[item.industry] = item.stocks || [];
+                });
+
+                // Update UI components
+                updateIndustryFilter();
+                updateSummary(lastData);
+                updateChart(lastData);
+                
+                // Update status messages
+                if (industryData.cached) {
+                    cacheText.textContent = 'Using cached data. For real-time updates, refresh during market hours.';
+                    cacheMessage.classList.remove('hidden');
+                }
+                
+                const totalSymbols = lastData.reduce((sum, item) => sum + (item.stocks?.length || 0), 0);
+                symbolCountText.textContent = `Processed ${totalSymbols} symbols across ${lastData.length} industries.`;
+                symbolCountMessage.classList.remove('hidden');
+                
+                // Update last updated time
+                document.getElementById('lastUpdated').textContent = `Last updated: ${formatTimestamp(industryData.timestamp)}`;
+                
+            } catch (error) {
+                console.error('Error fetching industry data:', error);
+                errorText.textContent = error.message;
+                errorMessage.classList.remove('hidden');
+                updateChart([]);
+                updateSummary([]);
+            } finally {
+                refreshBtn.disabled = false;
+                refreshText.textContent = 'Refresh Data';
+                loadingSpinner.classList.add('hidden');
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+
+        // Show industry stocks
+        function showIndustryStocks(industry) {
+            const stocksTableContainer = document.getElementById('stocksTableContainer');
+            const stocksTable = document.getElementById('stocksTable');
+            const stocksTableTitle = document.getElementById('stocksTableTitle');
+            const errorMessage = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+
+            try {
+                loadingOverlay.classList.remove('hidden');
+                const stocks = stockData[industry] || [];
+
+                if (!stocks.length) {
+                    errorText.textContent = `No stock data available for ${industry}.`;
+                    errorMessage.classList.remove('hidden');
+                    stocksTableContainer.classList.add('hidden');
+                    loadingOverlay.classList.add('hidden');
+                    return;
+                }
+
+                stocksTable.innerHTML = '';
+                stocks.forEach(stock => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50 transition animate-fade-in';
+                    
+                    const change = stock.priceInfo?.pChange || 0;
+                    
+                    row.innerHTML = `
+                        <td class="p-3 font-medium">
+                            <div class="flex items-center">
+                                <span class="bg-indigo-100 text-indigo-800 text-xs font-medium px-2 py-0.5 rounded mr-2">NSE</span>
+                                ${stock.symbol}
+                            </div>
+                        </td>
+                        <td class="p-3">${stock.info?.companyName || 'N/A'}</td>
+                        <td class="p-3 text-right font-medium ${change >= 0 ? 'text-green-600' : 'text-red-600'}">
+                            ${change >= 0 ? '+' : ''}${change.toFixed(2)}%
+                        </td>
+                        <td class="p-3 text-right">₹${stock.priceInfo?.lastPrice?.toFixed(2) || 'N/A'}</td>
+                    `;
+                    stocksTable.appendChild(row);
+                });
+
+                stocksTableTitle.innerHTML = `
+                    <span>${industry} Stocks</span> 
+                    <span class="bg-indigo-100 text-indigo-800 text-xs font-medium px-2 py-0.5 rounded ml-2">
+                        ${stocks.length} stock${stocks.length !== 1 ? 's' : ''}
+                    </span>
+                `;
+                stocksTableContainer.classList.remove('hidden');
+                
+                // Scroll to table
+                setTimeout(() => {
+                    stocksTableContainer.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            } catch (error) {
+                console.error(`Error displaying stocks for ${industry}:`, error);
+                errorText.textContent = `Failed to load stocks for ${industry}: ${error.message}`;
+                errorMessage.classList.remove('hidden');
+                stocksTableContainer.classList.add('hidden');
+            } finally {
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+
+        // Update industry filter
+        function updateIndustryFilter() {
+            const industryFilter = document.getElementById('industryFilter');
+            industryFilter.innerHTML = '<option value="all" selected>All Industries</option>';
+            
+            if (lastData && lastData.length > 0) {
+                lastData.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item.industry;
+                    option.textContent = item.industry;
+                    industryFilter.appendChild(option);
+                });
+            }
+        }
+
+        // Update summary
+        function updateSummary(data) {
+            const topIndustryEl = document.getElementById('topIndustry');
+            const worstIndustryEl = document.getElementById('worstIndustry');
+            const lastUpdatedEl = document.getElementById('lastUpdatedTime');
+
+            const now = new Date();
+            lastUpdatedEl.textContent = formatTimestamp(now);
+
+            if (!data || data.length === 0) {
+                topIndustryEl.textContent = 'N/A';
+                worstIndustryEl.textContent = 'N/A';
+                return;
+            }
+
+            // Find top and worst performing industries
+            const sortedData = [...data].sort((a, b) => b.avgPChange - a.avgPChange);
+            const top = sortedData[0];
+            const worst = sortedData[sortedData.length - 1];
+
+            topIndustryEl.textContent = top ? `${top.industry} (${top.avgPChange}%)` : 'N/A';
+            worstIndustryEl.textContent = worst ? `${worst.industry} (${worst.avgPChange}%)` : 'N/A';
+        }
+
+        // Update chart
+        function updateChart(data) {
+            const industryFilter = document.getElementById('industryFilter').value;
+            const sortToggle = document.getElementById('sortToggle').value;
+            const stocksTableContainer = document.getElementById('stocksTableContainer');
+
+            let filteredData = data || [];
+            if (industryFilter !== 'all') {
+                filteredData = data.filter(item => item.industry === industryFilter);
+            }
+
+            let entries = filteredData.map(item => ({
+                industry: item.industry,
+                avg: parseFloat(item.avgPChange) || 0,
+                count: item.stockCount || 0
+            }));
+
+            if (entries.length === 0) {
+                entries = [{ industry: 'No Data', avg: 0, count: 0 }];
+            }
+
+            entries.sort((a, b) => {
+                if (sortToggle === 'change-desc') return b.avg - a.avg;
+                if (sortToggle === 'change-asc') return a.avg - b.avg;
+                return a.industry.localeCompare(b.industry);
+            });
+
+            const labels = entries.map(entry => entry.industry);
+            const values = entries.map(entry => entry.avg);
+            const counts = entries.map(entry => entry.count);
+            const colors = values.map(value => value >= 0 ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)');
+            const borderColors = values.map(value => value >= 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)');
+
+            const ctx = document.getElementById('industryChart').getContext('2d');
+            if (industryChart) {
+                industryChart.destroy();
+            }
+
+            industryChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Average % Change',
+                        data: values,
+                        backgroundColor: colors,
+                        borderColor: borderColors,
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Average % Change',
+                                font: { size: 12, weight: 'bold' }
+                            },
+                            grid: { 
+                                color: 'rgba(0, 0, 0, 0.05)',
+                                drawBorder: false
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Industry',
+                                font: { size: 12, weight: 'bold' }
+                            },
+                            grid: { display: false },
+                            ticks: {
+                                autoSkip: true,
+                                maxRotation: 45,
+                                minRotation: 0
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                            titleFont: { size: 12, weight: 'bold' },
+                            bodyFont: { size: 12 },
+                            padding: 12,
+                            cornerRadius: 8,
+                            displayColors: false,
+                            callbacks: {
+                                title: function(context) {
+                                    return context[0].label;
+                                },
+                                label: function(context) {
+                                    const index = context.dataIndex;
+                                    const count = counts[index];
+                                    return `Avg Change: ${context.parsed.y.toFixed(2)}% (${count} stock${count > 1 ? 's' : ''})`;
+                                }
+                            }
+                        }
+                    },
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart'
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const industry = labels[index];
+                            if (industry !== 'No Data') {
+                                showIndustryStocks(industry);
+                            }
+                        }
+                    }
+                }
+            });
+
+            stocksTableContainer.classList.add('hidden');
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Existing event listeners
+            document.getElementById('refreshBtn').addEventListener('click', () => fetchIndustryData(true));
+            document.getElementById('retryBtn').addEventListener('click', () => fetchIndustryData(true));
+            document.getElementById('industryFilter').addEventListener('change', () => updateChart(lastData));
+            document.getElementById('sortToggle').addEventListener('change', () => updateChart(lastData));
+            document.getElementById('closeStocksTable').addEventListener('click', () => {
+                document.getElementById('stocksTableContainer').classList.add('hidden');
+            });
+
+            // Back to Top Button
+            const backToTopBtn = document.getElementById('backToTop');
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 300) {
+                    backToTopBtn.classList.remove('hidden');
+                } else {
+                    backToTopBtn.classList.add('hidden');
+                }
+            });
+            backToTopBtn.addEventListener('click', () => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+
+            // Initial Fetch
+            fetchIndustryData();
+            
+            // Auto-refresh every 5 minutes (300000 ms)
+            setInterval(() => fetchIndustryData(), 300000);
+        });
+    </script>
+</body>
+</html>

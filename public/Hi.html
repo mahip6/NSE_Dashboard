@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSE Industry Performance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'nifty': '#3b82f6',
+                        'sensex': '#10b981',
+                        'banknifty': '#8b5cf6',
+                        'finnifty': '#ec4899',
+                        'market-open': '#22c55e',
+                        'market-closed': '#ef4444',
+                        'currency': '#f59e0b',
+                        'commodity': '#f97316'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .card-hover {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .gradient-text {
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .performance-gradient {
+            background-image: linear-gradient(to right, #3b82f6, #10b981, #ef4444);
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+        }
+        .chart-container canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .sticky-nav {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            backdrop-filter: blur(8px);
+        }
+        .back-to-top {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 30;
+            transition: all 0.3s ease;
+        }
+        .back-to-top:hover {
+            transform: translateY(-3px);
+        }
+        .timeframe-btn {
+            transition: all 0.2s ease;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .timeframe-btn.active {
+            background: linear-gradient(to right, #4f46e5, #7c3aed);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .performance-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .performance-badge.positive {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        .performance-badge.negative {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+        .market-overview {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            padding-left: 1.5rem;
+            border-left: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .market-indicator {
+            display: flex;
+            flex-direction: column;
+            min-width: 80px;
+        }
+        .market-indicator-name {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .market-indicator-value {
+            font-weight: 600;
+            font-size: 1rem;
+            white-space: nowrap;
+        }
+        .market-indicator-change {
+            font-size: 0.75rem;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .market-indicator-change.positive {
+            color: #4ade80;
+        }
+        .market-indicator-change.negative {
+            color: #f87171;
+        }
+        .market-status {
+            display: flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            gap: 0.25rem;
+        }
+        .market-status.open {
+            background-color: rgba(34, 197, 94, 0.2);
+            color: #166534;
+        }
+        .market-status.closed {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #b91c1c;
+        }
+        .trend-indicator {
+            margin-right: 0.25rem;
+        }
+        .top-bar-scroll {
+            display: flex;
+            overflow-x: auto;
+            gap: 1.5rem;
+            padding: 0.5rem 0;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .top-bar-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        .currency-indicator {
+            background: linear-gradient(to right, #f59e0b, #f97316);
+            color: white;
+        }
+        .commodity-indicator {
+            background: linear-gradient(to right, #f97316, #ec4899);
+            color: white;
+        }
+        @media (max-width: 1280px) {
+            .market-overview {
+                gap: 1rem;
+            }
+            .market-indicator {
+                min-width: 70px;
+            }
+        }
+        @media (max-width: 1024px) {
+            .market-overview {
+                display: none;
+            }
+        }
+        .top-bar-container {
+            background: linear-gradient(to right, #1e3a8a, #3b82f6);
+            color: white;
+            padding: 0.5rem 0;
+        }
+        .top-bar-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans antialiased">
+    <!-- Top Bar with Market Overview -->
+    <div class="top-bar-container">
+        <div class="container mx-auto px-4">
+            <div class="top-bar-content">
+                <div class="flex items-center">
+                    <div class="market-status open mr-4">
+                        <i class="fas fa-circle"></i>
+                        <span>Market Open</span>
+                    </div>
+                    <div class="market-indicator">
+                        <div class="market-indicator-name text-white/80">
+                            <i class="fas fa-chart-line text-nifty"></i>
+                            NIFTY 50
+                        </div>
+                        <div class="market-indicator-value">22,415.65</div>
+                        <div class="market-indicator-change positive">+0.85% <i class="fas fa-arrow-up"></i></div>
+                    </div>
+                    <div class="market-indicator">
+                        <div class="market-indicator-name text-white/80">
+                            <i class="fas fa-chart-line text-sensex"></i>
+                            SENSEX
+                        </div>
+                        <div class="market-indicator-value">73,805.20</div>
+                        <div class="market-indicator-change positive">+0.78% <i class="fas fa-arrow-up"></i></div>
+                    </div>
+                    <div class="market-indicator">
+                        <div class="market-indicator-name text-white/80">
+                            <i class="fas fa-university text-banknifty"></i>
+                            BANKNIFTY
+                        </div>
+                        <div class="market-indicator-value">47,872.35</div>
+                        <div class="market-indicator-change positive">+1.12% <i class="fas fa-arrow-up"></i></div>
+                    </div>
+                    <div class="market-indicator">
+                        <div class="market-indicator-name text-white/80">
+                            <i class="fas fa-chart-pie text-finnifty"></i>
+                            FINNIFTY
+                        </div>
+                        <div class="market-indicator-value">21,456.80</div>
+                        <div class="market-indicator-change positive">+0.92% <i class="fas fa-arrow-up"></i></div>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <div class="market-indicator currency-indicator px-3 py-1 rounded-md">
+                        <div class="market-indicator-name">USD/INR</div>
+                        <div class="market-indicator-value">83.45</div>
+                        <div class="market-indicator-change negative">-0.12%</div>
+                    </div>
+                    <div class="market-indicator commodity-indicator px-3 py-1 rounded-md ml-3">
+                        <div class="market-indicator-name">GOLD (10g)</div>
+                        <div class="market-indicator-value">₹62,850</div>
+                        <div class="market-indicator-change positive">+0.35%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="sticky-nav bg-indigo-600/90 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center">
+                <h1 class="text-xl font-bold flex items-center">
+                    <i class="fas fa-chart-line mr-2"></i>
+                    <span>NSE Industry Dashboard</span>
+                </h1>
+            </div>
+            <div class="flex space-x-4">
+                <a href="#" class="hover:bg-indigo-700/80 px-3 py-1.5 rounded-md transition flex items-center text-sm font-medium">
+                    <i class="fas fa-arrow-trend-up mr-1.5"></i>
+                    <span>Gainers/Losers</span>
+                </a>
+                <a href="#" class="bg-white/10 px-3 py-1.5 rounded-md text-sm font-medium flex items-center">
+                    <i class="fas fa-industry mr-1.5"></i>
+                    <span>Industry Performance</span>
+                </a>
+                <a href="#" class="hover:bg-indigo-700/80 px-3 py-1.5 rounded-md transition flex items-center text-sm font-medium">
+                    <i class="fas fa-history mr-1.5"></i>
+                    <span>Historical Data</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <header class="text-center mb-10 animate-fade-in">
+            <div class="inline-block bg-white rounded-xl shadow-sm px-4 py-2 mb-4">
+                <span class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Real-time Industry Analytics</span>
+            </div>
+            <h1 class="text-4xl font-bold text-gray-800 mb-3">NSE <span class="performance-gradient gradient-text">Industry Performance</span> Dashboard</h1>
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto">Comprehensive performance metrics across all NSE industries with daily, weekly, and monthly views</p>
+            
+            <div class="flex justify-center mt-6">
+                <div class="bg-white rounded-lg shadow-sm p-2 inline-flex">
+                    <div class="flex items-center mr-4">
+                        <div class="w-2.5 h-2.5 rounded-full bg-green-500 mr-2"></div>
+                        <span class="text-xs text-gray-600">Live Market Data</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-2.5 h-2.5 rounded-full bg-blue-500 mr-2"></div>
+                        <span class="text-xs text-gray-600" id="lastUpdated">Last updated: Today, 11:45 AM IST</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Time Frame Selector -->
+        <div class="flex justify-center mb-8 animate-fade-in">
+            <div class="inline-flex rounded-lg bg-gray-100 p-1 shadow-sm">
+                <button id="timeframe-1d" class="timeframe-btn active" data-timeframe="1d">
+                    <i class="fas fa-clock mr-1.5"></i> Daily
+                </button>
+                <button id="timeframe-1w" class="timeframe-btn" data-timeframe="1w">
+                    <i class="fas fa-calendar-week mr-1.5"></i> Weekly
+                </button>
+                <button id="timeframe-1m" class="timeframe-btn" data-timeframe="1m">
+                    <i class="fas fa-calendar-alt mr-1.5"></i> Monthly
+                </button>
+                <button id="timeframe-1y" class="timeframe-btn" data-timeframe="1y">
+                    <i class="fas fa-calendar-days mr-1.5"></i> Yearly
+                </button>
+            </div>
+        </div>
+
+        <!-- Performance Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8 animate-fade-in">
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                <div class="flex items-center">
+                    <div class="p-2 rounded-lg bg-green-100 text-green-600 mr-3">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Top Industry</h3>
+                        <p id="topIndustry" class="text-lg font-semibold text-gray-800 mt-1">IT Services <span class="text-green-600">+3.25%</span></p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                <div class="flex items-center">
+                    <div class="p-2 rounded-lg bg-red-100 text-red-600 mr-3">
+                        <i class="fas fa-arrow-trend-down"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Worst Industry</h3>
+                        <p id="worstIndustry" class="text-lg font-semibold text-gray-800 mt-1">Metals <span class="text-red-600">-1.85%</span></p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                <div class="flex items-center">
+                    <div class="p-2 rounded-lg bg-blue-100 text-blue-600 mr-3">
+                        <i class="fas fa-chart-simple"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Market Sentiment</h3>
+                        <p id="marketStatus" class="text-lg font-semibold text-gray-800 mt-1">Bullish <span class="text-green-600">↑</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5 mb-6 shadow-sm card-hover animate-fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-chart-bar text-indigo-600 mr-2"></i>
+                    <span id="chartTitle">Industry Performance Overview (Daily)</span>
+                </h2>
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-500 mr-3">View:</span>
+                    <select class="block rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm py-1.5">
+                        <option>Percentage Change</option>
+                        <option>Absolute Value</option>
+                        <option>Volume Analysis</option>
+                    </select>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="industryChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Industry Performance Table -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5 mb-6 shadow-sm animate-fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-table text-indigo-600 mr-2"></i>
+                    Industry Performance Details
+                </h2>
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-500 mr-3">Filter:</span>
+                    <select class="block rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm py-1.5 mr-3">
+                        <option>All Industries</option>
+                        <option>Top Performers</option>
+                        <option>Bottom Performers</option>
+                    </select>
+                    <span class="text-sm text-gray-500 mr-3">Sort:</span>
+                    <select id="sortToggle" class="block rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm py-1.5">
+                        <option value="change-desc">Change (High to Low)</option>
+                        <option value="change-asc">Change (Low to High)</option>
+                        <option value="name">Industry Name (A-Z)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="bg-gray-50">
+                        <tr class="text-gray-600 text-xs uppercase tracking-wider">
+                            <th class="p-3 font-medium">Industry</th>
+                            <th class="p-3 font-medium text-right">Daily Change</th>
+                            <th class="p-3 font-medium text-right">Weekly Change</th>
+                            <th class="p-3 font-medium text-right">Monthly Change</th>
+                            <th class="p-3 font-medium text-right">Market Cap (Cr)</th>
+                            <th class="p-3 font-medium text-right">Top Stock</th>
+                        </tr>
+                    </thead>
+                    <tbody id="performanceTable" class="text-gray-700 divide-y divide-gray-200">
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 font-medium">Information Technology</td>
+                            <td class="p-3 text-right font-medium text-green-600">+2.85%</td>
+                            <td class="p-3 text-right font-medium text-green-600">+5.42%</td>
+                            <td class="p-3 text-right font-medium text-green-600">+12.35%</td>
+                            <td class="p-3 text-right">₹42,15,000</td>
+                            <td class="p-3 text-right">
+                                <span class="font-medium">INFY</span>
+                                <span class="text-xs ml-2 text-green-600">+3.25%</span>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 font-medium">Banking & Finance</td>
+                            <td class="p-3 text-right font-medium text-green-600">+1.42%</td>
+                            <td class="p-3 text-right font-medium text-green-600">+3.78%</td>
+                            <td class="p-3 text-right font-medium text-green-600">+8.65%</td>
+                            <td class="p-3 text-right">₹38,72,000</td>
+                            <td class="p-3 text-right">
+                                <span class="font-medium">HDFCBANK</span>
+                                <span class="text-xs ml-2 text-green-600">+2.15%</span>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 font-medium">Pharmaceuticals</td>
+                            <td class="p-3 text-right font-medium text-green-600">+1.25%</td>
+                            <td class="p-3 text-right font-medium text-green-600">+4.15%</td>
+                            <td class="p-3 text-right font-medium text-green-600">+10.25%</td>
+                            <td class="p-3 text-right">₹12,45,000</td>
+                            <td class="p-3 text-right">
+                                <span class="font-medium">SUNPHARMA</span>
+                                <span class="text-xs ml-2 text-green-600">+1.85%</span>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 font-medium">Automobile</td>
+                            <td class="p-3 text-right font-medium text-green-600">+0.85%</td>
+                            <td class="p-3 text-right font-medium text-green-600">+2.35%</td>
+                            <td class="p-3 text-right font-medium text-green-600">+6.45%</td>
+                            <td class="p-3 text-right">₹15,78,000</td>
+                            <td class="p-3 text-right">
+                                <span class="font-medium">MARUTI</span>
+                                <span class="text-xs ml-2 text-green-600">+1.25%</span>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 font-medium">Oil & Gas</td>
+                            <td class="p-3 text-right font-medium text-red-600">-0.35%</td>
+                            <td class="p-3 text-right font-medium text-green-600">+1.25%</td>
+                            <td class="p-3 text-right font-medium text-green-600">+4.15%</td>
+                            <td class="p-3 text-right">₹18,45,000</td>
+                            <td class="p-3 text-right">
+                                <span class="font-medium">RELIANCE</span>
+                                <span class="text-xs ml-2 text-red-600">-0.45%</span>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-3 font-medium">Metals & Mining</td>
+                            <td class="p-3 text-right font-medium text-red-600">-1.85%</td>
+                            <td class="p-3 text-right font-medium text-red-600">-3.15%</td>
+                            <td class="p-3 text-right font-medium text-green-600">+2.35%</td>
+                            <td class="p-3 text-right">₹8,75,000</td>
+                            <td class="p-3 text-right">
+                                <span class="font-medium">TATASTEEL</span>
+                                <span class="text-xs ml-2 text-red-600">-2.15%</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Additional Market Insights -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+                    Market Insights
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <h3 class="font-medium text-gray-800">IT Sector Leads Gains</h3>
+                        <p class="text-sm text-gray-600 mt-1">The IT sector is up 2.85% today, driven by strong quarterly earnings from major players. INFY and TCS both reported better-than-expected results.</p>
+                    </div>
+                    <div>
+                        <h3 class="font-medium text-gray-800">Metal Stocks Under Pressure</h3>
+                        <p class="text-sm text-gray-600 mt-1">Metal stocks declined 1.85% due to weakening global demand and falling commodity prices. Analysts recommend caution in the short term.</p>
+                    </div>
+                    <div>
+                        <h3 class="font-medium text-gray-800">Banking Sector Stable</h3>
+                        <p class="text-sm text-gray-600 mt-1">Banking stocks showed moderate gains of 1.42% as RBI maintains status quo on interest rates. HDFC Bank and ICICI Bank lead the sector.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-newspaper text-blue-500 mr-2"></i>
+                    Financial News
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <h3 class="font-medium text-gray-800">RBI Keeps Repo Rate Unchanged at 6.5%</h3>
+                        <p class="text-sm text-gray-600 mt-1">The Reserve Bank of India has decided to maintain the repo rate at 6.5% for the fourth consecutive meeting, citing persistent inflation concerns.</p>
+                    </div>
+                    <div>
+                        <h3 class="font-medium text-gray-800">India's GDP Growth Revised to 7.8% for FY25</h3>
+                        <p class="text-sm text-gray-600 mt-1">IMF revises India's growth projection upward to 7.8% for the current fiscal year, citing strong domestic demand and manufacturing growth.</p>
+                    </div>
+                    <div>
+                        <h3 class="font-medium text-gray-800">Global Tech Giants Announce India Investments</h3>
+                        <p class="text-sm text-gray-600 mt-1">Major technology companies have announced over $5 billion in new investments in India, focusing on AI research and data centers.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Back to Top Button -->
+        <button id="backToTop" class="back-to-top hidden bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:bg-indigo-700 transition">
+            <i class="fas fa-arrow-up"></i>
+        </button>
+    </div>
+
+    <footer class="bg-white border-t border-gray-200 py-6 mt-8">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">NSE Dashboards</h3>
+                    <p class="text-sm text-gray-600">Providing real-time market insights and analytics for informed investment decisions.</p>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Quick Links</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-sm text-gray-600 hover:text-indigo-600">Market Overview</a></li>
+                        <li><a href="#" class="text-sm text-gray-600 hover:text-indigo-600">Industry Analysis</a></li>
+                        <li><a href="#" class="text-sm text-gray-600 hover:text-indigo-600">Stock Screeners</a></li>
+                        <li><a href="#" class="text-sm text-gray-600 hover:text-indigo-600">Portfolio Tracker</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Resources</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-sm text-gray-600 hover:text-indigo-600">Market Reports</a></li>
+                        <li><a href="#" class="text-sm text-gray-600 hover:text-indigo-600">Research Papers</a></li>
+                        <li><a href="#" class="text-sm text-gray-600 hover:text-indigo-600">Tutorials</a></li>
+                        <li><a href="#" class="text-sm text-gray-600 hover:text-indigo-600">API Documentation</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Contact</h3>
+                    <ul class="space-y-2">
+                        <li class="text-sm text-gray-600">support@nsedashboards.com</li>
+                        <li class="text-sm text-gray-600">+91 98765 43210</li>
+                        <li class="text-sm text-gray-600">Mumbai, India</li>
+                        <li class="flex space-x-4 mt-3">
+                            <a href="#" class="text-gray-600 hover:text-indigo-600"><i class="fab fa-twitter"></i></a>
+                            <a href="#" class="text-gray-600 hover:text-indigo-600"><i class="fab fa-linkedin"></i></a>
+                            <a href="#" class="text-gray-600 hover:text-indigo-600"><i class="fab fa-facebook"></i></a>
+                            <a href="#" class="text-gray-600 hover:text-indigo-600"><i class="fab fa-instagram"></i></a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-200 mt-8 pt-6 text-center text-gray-500 text-sm">
+                <p>Data provided by NSE India. Market hours: 9:15 AM–3:30 PM IST, Monday–Friday</p>
+                <p class="mt-1">© 2023 NSE Dashboard. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize chart
+        const ctx = document.getElementById('industryChart').getContext('2d');
+        const industryChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['IT Services', 'Banking', 'Pharma', 'Automobile', 'Oil & Gas', 'Metals', 'Retail', 'Real Estate', 'Telecom', 'FMCG', 'Infrastructure', 'Power'],
+                datasets: [{
+                    label: 'Daily Change (%)',
+                    data: [2.85, 1.42, 1.25, 0.85, -0.35, -1.85, 1.75, 0.65, 1.95, 0.95, 0.75, 1.15],
+                    backgroundColor: [
+                        'rgba(59, 130, 246, 0.7)',
+                        'rgba(16, 185, 129, 0.7)',
+                        'rgba(139, 92, 246, 0.7)',
+                        'rgba(236, 72, 153, 0.7)',
+                        'rgba(245, 158, 11, 0.7)',
+                        'rgba(239, 68, 68, 0.7)',
+                        'rgba(101, 163, 13, 0.7)',
+                        'rgba(249, 115, 22, 0.7)',
+                        'rgba(6, 182, 212, 0.7)',
+                        'rgba(168, 85, 247, 0.7)',
+                        'rgba(20, 184, 166, 0.7)',
+                        'rgba(8, 145, 178, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgb(59, 130, 246)',
+                        'rgb(16, 185, 129)',
+                        'rgb(139, 92, 246)',
+                        'rgb(236, 72, 153)',
+                        'rgb(245, 158, 11)',
+                        'rgb(239, 68, 68)',
+                        'rgb(101, 163, 13)',
+                        'rgb(249, 115, 22)',
+                        'rgb(6, 182, 212)',
+                        'rgb(168, 85, 247)',
+                        'rgb(20, 184, 166)',
+                        'rgb(8, 145, 178)'
+                    ],
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Daily Change (%)',
+                            font: { size: 12, weight: 'bold' }
+                        },
+                        grid: { 
+                            color: 'rgba(0, 0, 0, 0.05)',
+                            drawBorder: false
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Industry',
+                            font: { size: 12, weight: 'bold' }
+                        },
+                        grid: { display: false },
+                        ticks: {
+                            autoSkip: true,
+                            maxRotation: 45,
+                            minRotation: 0
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        enabled: true,
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                        titleFont: { size: 12, weight: 'bold' },
+                        bodyFont: { size: 12 },
+                        padding: 12,
+                        cornerRadius: 8,
+                        displayColors: false,
+                        callbacks: {
+                            title: function(context) {
+                                return context[0].label;
+                            },
+                            label: function(context) {
+                                return `Daily Change: ${context.parsed.y.toFixed(2)}%`;
+                            }
+                        }
+                    }
+                },
+                animation: {
+                    duration: 1000,
+                    easing: 'easeOutQuart'
+                }
+            }
+        });
+
+        // Timeframe button functionality
+        document.querySelectorAll('.timeframe-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.timeframe-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById('chartTitle').textContent = `Industry Performance Overview (${this.textContent.trim()})`;
+            });
+        });
+
+        // Back to top button functionality
+        const backToTopBtn = document.getElementById('backToTop');
+        window.addEventListener('scroll', () => {
+            backToTopBtn.classList.toggle('hidden', window.scrollY < 300);
+        });
+        backToTopBtn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        // Update market data every 30 seconds (simulated)
+        setInterval(() => {
+            const nifty = document.querySelector('.market-indicator:nth-child(2) .market-indicator-value');
+            const sensex = document.querySelector('.market-indicator:nth-child(3) .market-indicator-value');
+            
+            // Simulate small price changes
+            const niftyVal = parseFloat(nifty.textContent);
+            const sensexVal = parseFloat(sensex.textContent);
+            
+            const niftyChange = (Math.random() - 0.4) / 10;
+            const sensexChange = (Math.random() - 0.4) / 10;
+            
+            nifty.textContent = (niftyVal + niftyChange).toFixed(2);
+            sensex.textContent = (sensexVal + sensexChange).toFixed(2);
+        }, 30000);
+    </script>
+</body>
+</html>

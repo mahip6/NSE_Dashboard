@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSE Indices Performance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+        .index-card {
+            transition: all 0.3s ease;
+        }
+        .index-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .positive-change {
+            background-color: rgba(16, 185, 129, 0.1);
+        }
+        .negative-change {
+            background-color: rgba(239, 68, 68, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans antialiased">
+    <!-- Navigation -->
+    <nav class="bg-indigo-600 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center">
+                <i class="fas fa-chart-line mr-2"></i>
+                <span>NSE Dashboards</span>
+            </h1>
+            <div class="flex space-x-4">
+                <a href="/index.html" class="hover:bg-indigo-700/80 px-3 py-1.5 rounded-md transition flex items-center text-sm font-medium">
+                    <i class="fas fa-arrow-trend-up mr-1.5"></i>
+                    <span>Gainers/Losers</span>
+                </a>
+                <a href="/industry.html" class="hover:bg-indigo-700/80 px-3 py-1.5 rounded-md transition flex items-center text-sm font-medium">
+                    <i class="fas fa-industry mr-1.5"></i>
+                    <span>Industries</span>
+                </a>
+                <a href="/indices.html" class="bg-white/10 px-3 py-1.5 rounded-md text-sm font-medium flex items-center">
+                    <i class="fas fa-list-ol mr-1.5"></i>
+                    <span>Indices</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <header class="text-center mb-10 animate-fade-in">
+            <div class="inline-block bg-white rounded-xl shadow-sm px-4 py-2 mb-4">
+                <span class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Market Indices</span>
+            </div>
+            <h1 class="text-4xl font-bold text-gray-800 mb-3">NSE <span class="bg-gradient-to-r from-indigo-600 to-blue-600 gradient-text">Indices Performance</span></h1>
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto">Real-time performance of key market indices</p>
+            
+            <div class="flex justify-center mt-6">
+                <div class="bg-white rounded-lg shadow-sm p-2 inline-flex">
+                    <div class="flex items-center mr-4">
+                        <div class="w-2.5 h-2.5 rounded-full bg-green-500 mr-2"></div>
+                        <span class="text-xs text-gray-600">Live Market Data</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-2.5 h-2.5 rounded-full bg-blue-500 mr-2"></div>
+                        <span class="text-xs text-gray-600" id="lastUpdated">Last updated: --</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Controls -->
+        <div class="flex justify-end mb-6 animate-fade-in">
+            <button id="refreshBtn" class="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-medium py-2.5 px-5 rounded-lg transition flex items-center justify-center shadow-md hover:shadow-lg">
+                <span id="refreshText">Refresh Data</span>
+                <svg id="loadingSpinner" class="animate-spin h-4 w-4 ml-2 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 mb-6 animate-fade-in" role="alert">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-circle text-red-500 mt-1"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Error fetching data</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                        <p id="errorText"></p>
+                    </div>
+                    <div class="mt-4">
+                        <button id="retryBtn" type="button" class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                            Retry
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Index Cards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8 animate-fade-in" id="indicesGrid">
+            <!-- Cards will be inserted here by JavaScript -->
+            <div class="skeleton-card bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div class="animate-pulse">
+                    <div class="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                    <div class="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                    <div class="h-4 bg-gray-200 rounded w-1/2"></div>
+                </div>
+            </div>
+            <!-- Repeat skeleton cards as needed -->
+        </div>
+
+        <!-- Performance Chart -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5 mb-6 shadow-sm animate-fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-chart-bar text-indigo-600 mr-2"></i>
+                    Indices Performance Comparison
+                </h2>
+                <div class="text-sm text-gray-500">
+                    <span>1-Day % Change</span>
+                </div>
+            </div>
+            <div class="chart-container" style="height: 400px;">
+                <canvas id="indicesChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-white border-t border-gray-200 py-6 mt-8">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>Data provided by NSE India. Market hours: 9:15 AM–3:30 PM IST, Monday–Friday</p>
+            <p class="mt-1">© 2023 NSE Dashboard. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        let indicesChart;
+        const trackedIndices = [
+            'NIFTY 50', 
+            'NIFTY BANK', 
+            'NIFTY IT', 
+            'NIFTY AUTO',
+            'NIFTY FMCG',
+            'NIFTY PHARMA',
+            'NIFTY METAL',
+            'NIFTY INFRA'
+        ];
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '--';
+            const date = new Date(timestamp);
+            return date.toLocaleString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+        }
+
+        async function fetchIndicesData(forceRefresh = false) {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const refreshText = document.getElementById('refreshText');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const errorMessage = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+            const lastUpdatedEl = document.getElementById('lastUpdated');
+
+            refreshBtn.disabled = true;
+            refreshText.textContent = 'Loading...';
+            loadingSpinner.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+
+            try {
+                const url = forceRefresh ? '/api/indices-data?refresh=true' : '/api/indices-data';
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `HTTP error ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Indices data:', data);
+
+                // Update last updated time
+                const now = new Date();
+                lastUpdatedEl.textContent = `Last updated: ${formatTimestamp(now)}`;
+
+                // Filter only the indices we want to track
+                const filteredData = data.filter(index => 
+                    trackedIndices.includes(index.indexName.toUpperCase())
+                );
+
+                updateIndexCards(filteredData);
+                updateIndicesChart(filteredData);
+            } catch (error) {
+                console.error('Error fetching indices data:', error);
+                errorText.textContent = error.message;
+                errorMessage.classList.remove('hidden');
+            } finally {
+                refreshBtn.disabled = false;
+                refreshText.textContent = 'Refresh Data';
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+
+        function updateIndexCards(indices) {
+            const grid = document.getElementById('indicesGrid');
+            grid.innerHTML = '';
+
+            indices.forEach(index => {
+                const change = parseFloat(index.percentChange);
+                const isPositive = change >= 0;
+                
+                const card = document.createElement('div');
+                card.className = `index-card bg-white rounded-xl border border-gray-200 p-5 shadow-sm ${isPositive ? 'positive-change' : 'negative-change'}`;
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="text-lg font-semibold text-gray-800">${index.indexName}</h3>
+                        <span class="text-xs font-medium px-2 py-1 rounded-full ${isPositive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                            ${isPositive ? '+' : ''}${change.toFixed(2)}%
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <p class="text-sm text-gray-500">Current</p>
+                            <p class="text-xl font-bold">${parseFloat(index.last).toFixed(2)}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm text-gray-500">Day Range</p>
+                            <p class="text-sm">${parseFloat(index.low).toFixed(2)} - ${parseFloat(index.high).toFixed(2)}</p>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function updateIndicesChart(indices) {
+            const ctx = document.getElementById('indicesChart').getContext('2d');
+            
+            // Sort indices by performance
+            const sortedIndices = [...indices].sort((a, b) => 
+                parseFloat(b.percentChange) - parseFloat(a.percentChange)
+            );
+
+            if (indicesChart) {
+                indicesChart.destroy();
+            }
+
+            indicesChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedIndices.map(index => index.indexName),
+                    datasets: [{
+                        label: '1-Day Change (%)',
+                        data: sortedIndices.map(index => parseFloat(index.percentChange)),
+                        backgroundColor: sortedIndices.map(index => 
+                            parseFloat(index.percentChange) >= 0 
+                                ? 'rgba(16, 185, 129, 0.7)' 
+                                : 'rgba(239, 68, 68, 0.7)'
+                        ),
+                        borderColor: sortedIndices.map(index => 
+                            parseFloat(index.percentChange) >= 0 
+                                ? 'rgba(16, 185, 129, 1)' 
+                                : 'rgba(239, 68, 68, 1)'
+                        ),
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Percentage Change',
+                                font: { size: 12, weight: 'bold' }
+                            },
+                            grid: { 
+                                color: 'rgba(0, 0, 0, 0.05)',
+                                drawBorder: false
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Index',
+                                font: { size: 12, weight: 'bold' }
+                            },
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.raw.toFixed(2)}%`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Event Listeners
+        document.getElementById('refreshBtn').addEventListener('click', () => fetchIndicesData(true));
+        document.getElementById('retryBtn').addEventListener('click', () => fetchIndicesData(true));
+
+        // Initial Load
+        fetchIndicesData();
+
+        // Auto-refresh every 5 minutes
+        setInterval(() => fetchIndicesData(), 300000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSE Industry Performance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Existing styles remain the same */
+        .timeframe-btn {
+            transition: all 0.2s ease;
+        }
+        .timeframe-btn.active {
+            background: linear-gradient(to right, #4f46e5, #7c3aed);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans antialiased">
+    <!-- Navigation Bar -->
+    <nav class="sticky-nav bg-indigo-600/90 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center">
+                <i class="fas fa-chart-line mr-2"></i>
+                <span>NSE Dashboards</span>
+            </h1>
+            <div class="flex space-x-4">
+                <a href="/index.html" class="hover:bg-indigo-700/80 px-3 py-1.5 rounded-md transition flex items-center text-sm font-medium">
+                    <i class="fas fa-arrow-trend-up mr-1.5"></i>
+                    <span>Gainers/Losers</span>
+                </a>
+                <a href="/industry.html" class="bg-white/10 px-3 py-1.5 rounded-md text-sm font-medium flex items-center">
+                    <i class="fas fa-industry mr-1.5"></i>
+                    <span>Industry Performance</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <header class="text-center mb-10 animate-fade-in">
+            <div class="inline-block bg-white rounded-xl shadow-sm px-4 py-2 mb-4">
+                <span class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Industry Analytics</span>
+            </div>
+            <h1 class="text-4xl font-bold text-gray-800 mb-3">NSE <span class="performance-gradient gradient-text">Industry Performance</span></h1>
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto">Simple average % change by industry (equal weights)</p>
+            
+            <div class="flex justify-center mt-6">
+                <div class="bg-white rounded-lg shadow-sm p-2 inline-flex">
+                    <div class="flex items-center mr-4">
+                        <div class="w-2.5 h-2.5 rounded-full bg-green-500 mr-2"></div>
+                        <span class="text-xs text-gray-600">Live Market Data</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-2.5 h-2.5 rounded-full bg-blue-500 mr-2"></div>
+                        <span class="text-xs text-gray-600" id="lastUpdated">Last updated: --</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Time Frame Selector -->
+        <div class="flex justify-center mb-8 animate-fade-in">
+            <div class="inline-flex rounded-lg bg-gray-100 p-1 shadow-sm">
+                <button id="timeframe-1d" class="timeframe-btn active px-4 py-2 rounded-md text-sm font-medium" data-timeframe="1d">
+                    <i class="fas fa-clock mr-1.5"></i> Intraday
+                </button>
+                <button id="timeframe-1w" class="timeframe-btn px-4 py-2 rounded-md text-sm font-medium" data-timeframe="1w">
+                    <i class="fas fa-calendar-week mr-1.5"></i> Weekly
+                </button>
+                <button id="timeframe-1m" class="timeframe-btn px-4 py-2 rounded-md text-sm font-medium" data-timeframe="1m">
+                    <i class="fas fa-calendar-alt mr-1.5"></i> Monthly
+                </button>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls-container flex flex-wrap gap-4 mb-8 animate-fade-in">
+            <div class="flex-1 min-w-[200px]">
+                <label for="industryFilter" class="block text-sm font-medium text-gray-700 mb-1.5">Filter Industry</label>
+                <select id="industryFilter" class="block w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm dropdown-arrow py-2.5">
+                    <option value="all" selected>All Industries</option>
+                </select>
+            </div>
+            <div class="flex-1 min-w-[200px]">
+                <label for="sortToggle" class="block text-sm font-medium text-gray-700 mb-1.5">Sort By</label>
+                <select id="sortToggle" class="block w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm dropdown-arrow py-2.5">
+                    <option value="change-desc">Change (High to Low)</option>
+                    <option value="change-asc">Change (Low to High)</option>
+                    <option value="name">Industry Name (A-Z)</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button id="refreshBtn" class="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-medium py-2.5 px-5 rounded-lg transition flex items-center justify-center shadow-md hover:shadow-lg">
+                    <span id="refreshText">Refresh Data</span>
+                    <svg id="loadingSpinner" class="animate-spin h-4 w-4 ml-2 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <!-- Existing messages remain the same -->
+
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8 animate-fade-in">
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                <div class="flex items-center">
+                    <div class="p-2 rounded-lg bg-green-100 text-green-600 mr-3">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Top Industry</h3>
+                        <p id="topIndustry" class="text-lg font-semibold text-gray-800 mt-1">--</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                <div class="flex items-center">
+                    <div class="p-2 rounded-lg bg-red-100 text-red-600 mr-3">
+                        <i class="fas fa-arrow-trend-down"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Worst Industry</h3>
+                        <p id="worstIndustry" class="text-lg font-semibold text-gray-800 mt-1">--</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                <div class="flex items-center">
+                    <div class="p-2 rounded-lg bg-blue-100 text-blue-600 mr-3">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Last Updated</h3>
+                        <p id="lastUpdatedTime" class="text-lg font-semibold text-gray-800 mt-1">--</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5 mb-6 shadow-sm card-hover animate-fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-chart-bar text-indigo-600 mr-2"></i>
+                    <span id="chartTitle">Industry Performance Overview</span>
+                </h2>
+                <div class="text-sm text-gray-500">
+                    <span id="chartInfo">Click bars for stock details</span>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="industryChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Stock Symbols Table -->
+        <!-- Existing table remains the same -->
+
+        <!-- Back to Top Button -->
+        <!-- Existing button remains the same -->
+    </div>
+
+    <!-- Loading Overlay -->
+    <!-- Existing overlay remains the same -->
+
+    <footer class="bg-white border-t border-gray-200 py-6 mt-8">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>Data provided by NSE India. Market hours: 9:15 AM–3:30 PM IST, Monday–Friday</p>
+            <p class="mt-1">© 2023 NSE Dashboard. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Global variables
+        let industryChart;
+        let allIndustries = [];
+        let stockData = {};
+        let lastData = [];
+        let currentTimeFrame = '1d';
+        let timeFrameData = {
+            '1d': null,
+            '1w': null,
+            '1m': null
+        };
+
+        // Time frame labels
+        const timeFrameLabels = {
+            '1d': 'Intraday',
+            '1w': 'Weekly',
+            '1m': 'Monthly'
+        };
+
+        // Format timestamp
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '--';
+            const date = new Date(timestamp);
+            return date.toLocaleString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+        }
+
+        // Set active time frame
+        function setActiveTimeFrame(timeFrame) {
+            // Update buttons
+            document.querySelectorAll('.timeframe-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`timeframe-${timeFrame}`).classList.add('active');
+            
+            // Update UI
+            document.getElementById('chartTitle').textContent = `${timeFrameLabels[timeFrame]} Industry Performance`;
+            document.getElementById('chartInfo').textContent = `Showing ${timeFrameLabels[timeFrame].toLowerCase()} performance (click bars for details)`;
+        }
+
+        // Fetch stock data from NSE API
+        async function fetchStockData(symbol) {
+            try {
+                const response = await axios.get(`https://www.nseindia.com/api/quote-equity?symbol=${symbol}`, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                    }
+                });
+                return response.data;
+            } catch (error) {
+                console.error(`Error fetching data for ${symbol}:`, error);
+                return null;
+            }
+        }
+
+        // Calculate weekly/monthly change
+        function calculateHistoricalChange(historicalData, days) {
+            if (!historicalData || historicalData.length < days) return 0;
+            
+            const todayPrice = historicalData[0].lastPrice;
+            const pastPrice = historicalData[days - 1].lastPrice;
+            
+            if (!pastPrice || pastPrice === 0) return 0;
+            
+            return ((todayPrice - pastPrice) / pastPrice) * 100;
+        }
+
+        // Process industry data
+        function processIndustryData(industryData, timeFrame) {
+            return industryData.map(industry => {
+                const stocks = industry.stocks || [];
+                
+                // Calculate average change based on time frame
+                const changes = stocks.map(stock => {
+                    if (timeFrame === '1d') {
+                        return stock.priceInfo.pChange;
+                    } else {
+                        // For weekly/monthly, use historical data
+                        const days = timeFrame === '1w' ? 5 : 20; // 5 trading days in a week, ~20 in a month
+                        return calculateHistoricalChange(stock.historicalData, days);
+                    }
+                });
+                
+                // Filter out invalid values
+                const validChanges = changes.filter(change => !isNaN(change));
+                
+                // Calculate average
+                const avgChange = validChanges.length > 0 
+                    ? validChanges.reduce((sum, change) => sum + change, 0) / validChanges.length
+                    : 0;
+                
+                return {
+                    ...industry,
+                    avgPChange: avgChange,
+                    validStocks: validChanges.length
+                };
+            });
+        }
+
+        // Fetch industry data
+        async function fetchIndustryData(forceRefresh = false) {
+            // ... existing fetch logic with modifications ...
+        }
+
+        // Show industry stocks
+        function showIndustryStocks(industry) {
+            // ... existing function with time frame indicator ...
+        }
+
+        // Update industry filter
+        function updateIndustryFilter() {
+            // ... existing function ...
+        }
+
+        // Update summary
+        function updateSummary(data) {
+            // ... existing function with time frame indicator ...
+        }
+
+        // Update chart
+        function updateChart(data) {
+            // ... existing function with time frame in tooltip ...
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Time frame buttons
+            document.querySelectorAll('.timeframe-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const timeFrame = btn.dataset.timeframe;
+                    currentTimeFrame = timeFrame;
+                    setActiveTimeFrame(timeFrame);
+                    
+                    if (timeFrameData[timeFrame]) {
+                        lastData = timeFrameData[timeFrame];
+                        updateSummary(lastData);
+                        updateChart(lastData);
+                    } else {
+                        fetchIndustryData();
+                    }
+                });
+            });
+            
+            // Existing event listeners...
+        });
+
+        // Set default time frame
+        setActiveTimeFrame(currentTimeFrame);
+        
+        // Initial Fetch
+        fetchIndustryData();
+    </script>
+</body>
+</html>

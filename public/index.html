@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSE Top 10 Gainers & Losers Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            color: white;
+            backdrop-filter: blur(4px);
+        }
+        .card-hover {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .gradient-text {
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .gainers-gradient {
+            background-image: linear-gradient(to right, #10b981, #3b82f6);
+        }
+        .losers-gradient {
+            background-image: linear-gradient(to right, #ef4444, #f59e0b);
+        }
+        .skeleton-row {
+            height: 48px;
+        }
+        /* Table Styling */
+        .responsive-table {
+            width: 100%;
+            font-size: 0.875rem;
+        }
+        .responsive-table th, .responsive-table td {
+            padding: 0.75rem;
+            white-space: nowrap;
+        }
+        .responsive-table th {
+            position: sticky;
+            top: 0;
+            background: #f9fafb;
+            z-index: 10;
+        }
+        .responsive-table .symbol-col {
+            width: 30%;
+            min-width: 80px;
+        }
+        .responsive-table .price-col, .responsive-table .change-col {
+            width: 35%;
+            min-width: 90px;
+        }
+        /* Mobile Adjustments */
+        @media (max-width: 640px) {
+            .responsive-table {
+                font-size: 0.75rem;
+                display: block;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .responsive-table th, .responsive-table td {
+                padding: 0.5rem;
+            }
+            .responsive-table .symbol-col {
+                width: 35%;
+                position: sticky;
+                left: 0;
+                background: #fff;
+                z-index: 5;
+            }
+            .responsive-table .price-col, .responsive-table .change-col {
+                width: 32.5%;
+            }
+            .responsive-table th.symbol-col {
+                background: #f9fafb;
+            }
+            .card-hover:hover {
+                transform: none;
+                box-shadow: none;
+            }
+            .header-title {
+                font-size: 2rem;
+            }
+            .button-group {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            .button-group button, .button-group a {
+                width: 100%;
+                padding: 0.75rem;
+                font-size: 0.875rem;
+            }
+            .error-message, .cache-message {
+                max-width: 100%;
+                padding: 0.75rem;
+                font-size: 0.75rem;
+            }
+            .loading-overlay span {
+                font-size: 1rem;
+            }
+            .loading-overlay p {
+                font-size: 0.75rem;
+            }
+        }
+        @media (max-width: 1024px) {
+            .grid-cols-2 {
+                grid-template-columns: 1fr;
+            }
+            .responsive-table {
+                font-size: 0.8125rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans antialiased">
+    <div class="container mx-auto px-4 py-6 max-w-6xl">
+        <header class="text-center mb-8">
+            <div class="inline-block bg-white rounded-xl shadow-md px-4 py-2 mb-3">
+                <span class="text-xs font-medium text-indigo-600">NSE MARKET DASHBOARD</span>
+            </div>
+            <h1 class="header-title text-4xl font-bold text-gray-800 mb-2">NSE Top 10 <span class="gainers-gradient gradient-text">Gainers</span> & <span class="losers-gradient gradient-text">Losers</span></h1>
+            <p class="text-base text-gray-600 max-w-xl mx-auto">Real-time market insights for Nifty 500 stocks with advanced analytics</p>
+            
+            <div class="flex justify-center mt-4">
+                <div class="bg-white rounded-lg shadow-sm p-2 inline-flex text-xs">
+                    <div class="flex items-center mr-3">
+                        <div class="w-2 h-2 rounded-full bg-green-500 mr-1"></div>
+                        <span class="text-gray-600">Live Market</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-2 h-2 rounded-full bg-blue-500 mr-1"></div>
+                        <span class="text-gray-600" id="lastUpdated">Last updated: --</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <div class="button-group flex flex-col sm:flex-row justify-center items-center mb-8 gap-3">
+            <a href="/industry.html" class="w-full sm:w-auto flex items-center justify-center bg-gradient-to-r from-gray-700 to-gray-900 hover:from-gray-600 hover:to-gray-800 text-white font-semibold py-2 px-5 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg">
+                <i class="fas fa-industry mr-2"></i>
+                <span>Industry Dashboard</span>
+            </a>
+            <button id="refreshBtn" class="w-full sm:w-auto flex items-center justify-center bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-semibold py-2 px-5 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg">
+                <span id="refreshText">Refresh Data</span>
+                <svg id="loadingSpinner" class="animate-spin h-4 w-4 ml-2 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <div id="errorMessage" class="error-message hidden bg-red-50 border border-red-200 rounded-xl p-3 mb-6 animate-fade-in max-w-xl mx-auto" role="alert">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-circle text-red-500 mt-1"></i>
+                </div>
+                <div class="ml-2">
+                    <h3 class="text-sm font-medium text-red-800">Error fetching data</h3>
+                    <div class="mt-1 text-sm text-red-700">
+                        <p id="errorText"></p>
+                    </div>
+                    <div class="mt-2">
+                        <div class="-mx-1 -my-1 flex">
+                            <button id="retryBtn" type="button" class="bg-red-50 px-2 py-1 rounded-md text-sm font-medium text-red-800 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-600">
+                                Retry
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="cacheMessage" class="cache-message hidden bg-blue-50 border border-blue-200 rounded-xl p-3 mb-6 animate-fade-in max-w-xl mx-auto" role="alert">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-info-circle text-blue-500 mt-1"></i>
+                </div>
+                <div class="ml-2">
+                    <h3 class="text-sm font-medium text-blue-800">Information</h3>
+                    <div class="mt-1 text-sm text-blue-700">
+                        <p id="cacheText"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden card-hover">
+                <div class="px-4 py-4 bg-gradient-to-r from-green-50 to-green-100 border-b border-green-200">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                            <i class="fas fa-chart-line text-green-600 mr-2"></i>
+                            Top 10 Gainers
+                        </h2>
+                        <span class="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">Live</span>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="responsive-table text-left">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
+                                <th class="p-3 font-medium symbol-col">Symbol</th>
+                                <th class="p-3 font-medium price-col">LTP (₹)</th>
+                                <th class="p-3 font-medium change-col">Change (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gainersTable" class="text-gray-700 divide-y divide-gray-200">
+                            <!-- Skeleton loading -->
+                            <tr><td colspan="3" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                            <tr><td colspan="3" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                            <tr><td colspan="3" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                            <tr><td colspan="3" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                            <tr><td colspan="3" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-4 py-2 bg-gray-50 text-right text-xs text-gray-500 border-t border-gray-200">
+                    <span id="gainersTimestamp">--</span>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden card-hover">
+                <div class="px-4 py-4 bg-gradient-to-r from-red-50 to-red-100 border-b border-red-200">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                            <i class="fas fa-chart-line text-red-600 mr-2 transform rotate-180"></i>
+                            Top 10 Losers
+                        </h2>
+                        <span class="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">Live</span>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="responsive-table text-left">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
+                                <th class="p-3 font-medium symbol-col">Symbol</th>
+                                <th class="p-3 font-medium price-col">LTP (₹)</th>
+                                <th class="p-3 font-medium change-col">Change (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="losersTable" class="text-gray-700 divide-y divide-gray-200">
+                            <!-- Skeleton loading -->
+                            <tr><td colspan="3" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                            <tr><td colspan="3" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                            <tr><td colspan="3" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                            <tr><td colspan="3" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                            <tr><td colspan="3" class="p-3"><div class="skeleton-row bg-gray-100 rounded animate-pulse"></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-4 py-2 bg-gray-50 text-right text-xs text-gray-500 border-t border-gray-200">
+                    <span id="losersTimestamp">--</span>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="mt-10 text-center text-gray-500 text-xs">
+            <p>Data provided by NSE India. Market hours: 9:15 AM–3:30 PM IST, Monday–Friday</p>
+            <p class="mt-1">© 2025 NSE Dashboard. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="flex flex-col items-center">
+            <div class="relative">
+                <svg class="animate-spin h-10 w-10 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <i class="fas fa-chart-line text-white text-base"></i>
+                </div>
+            </div>
+            <span class="mt-3 text-base font-medium">Loading market data...</span>
+            <p class="mt-1 text-xs opacity-80">This may take a few moments</p>
+        </div>
+    </div>
+
+    <script>
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '--';
+            const date = new Date(timestamp);
+            return date.toLocaleString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+        }
+
+        async function fetchMarketData(forceRefresh = false) {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const refreshText = document.getElementById('refreshText');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const errorMessage = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+            const cacheMessage = document.getElementById('cacheMessage');
+            const cacheText = document.getElementById('cacheText');
+            const lastUpdatedEl = document.getElementById('lastUpdated');
+
+            refreshBtn.disabled = true;
+            refreshText.textContent = 'Loading...';
+            loadingSpinner.classList.remove('hidden');
+            loadingOverlay.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+            cacheMessage.classList.add('hidden');
+
+            try {
+                // Add cache-busting timestamp to force fresh data
+                const timestamp = new Date().getTime();
+                const url = forceRefresh ? `/api/market-data?refresh=true&t=${timestamp}` : `/api/market-data?t=${timestamp}`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `HTTP error ${response.status}`);
+                }
+                const data = await response.json();
+                console.log('API /market-data response:', data);
+                if (!data.gainers.length && !data.losers.length) {
+                    throw new Error('No market data available. Check nifty500.csv and API connectivity.');
+                }
+                
+                // Update timestamps
+                const now = new Date();
+                lastUpdatedEl.textContent = `Last updated: ${formatTimestamp(now)}`;
+                
+                if (data.cached) {
+                    cacheText.textContent = 'Using cached data (last updated within 5 minutes). For real-time updates, please check during market hours (9:15 AM–3:30 PM IST, Mon–Fri).';
+                    cacheMessage.classList.remove('hidden');
+                }
+                updateTables(data.gainers, data.losers, data.timestamp);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                errorText.textContent = `${error.message} Verify nifty500.csv in D:\\01May2025\\NSE_Dashboard for correct LTPs (e.g., Timken India LTP should be ~2728.40). Test during market hours (9:15 AM–3:30 PM IST, Mon–Fri).`;
+                errorMessage.classList.remove('hidden');
+            } finally {
+                refreshBtn.disabled = false;
+                refreshText.textContent = 'Refresh Data';
+                loadingSpinner.classList.add('hidden');
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+
+        function updateTables(gainers, losers, timestamp) {
+            const gainersTable = document.getElementById('gainersTable');
+            const losersTable = document.getElementById('losersTable');
+            const gainersTimestamp = document.getElementById('gainersTimestamp');
+            const losersTimestamp = document.getElementById('losersTimestamp');
+
+            gainersTable.innerHTML = '';
+            losersTable.innerHTML = '';
+
+            gainers.forEach(stock => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-green-50 transition duration-150 animate-fade-in';
+                row.innerHTML = `
+                    <td class="p-3 font-medium symbol-col">
+                        <div class="flex items-center">
+                            <span class="bg-green-100 text-green-800 text-xs font-medium px-1.5 py-0.5 rounded mr-1">NSE</span>
+                            ${stock.symbol}
+                        </div>
+                    </td>
+                    <td class="p-3 text-right font-medium price-col">₹${stock.priceInfo.lastPrice.toFixed(2)}</td>
+                    <td class="p-3 text-right change-col">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <i class="fas fa-arrow-up mr-1"></i>
+                            +${stock.priceInfo.pChange.toFixed(2)}%
+                        </span>
+                    </td>
+                `;
+                gainersTable.appendChild(row);
+            });
+
+            losers.forEach(stock => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-red-50 transition duration-150 animate-fade-in';
+                row.innerHTML = `
+                    <td class="p-3 font-medium symbol-col">
+                        <div class="flex items-center">
+                            <span class="bg-red-100 text-red-800 text-xs font-medium px-1.5 py-0.5 rounded mr-1">NSE</span>
+                            ${stock.symbol}
+                        </div>
+                    </td>
+                    <td class="p-3 text-right font-medium price-col">₹${stock.priceInfo.lastPrice.toFixed(2)}</td>
+                    <td class="p-3 text-right change-col">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <i class="fas fa-arrow-down mr-1"></i>
+                            ${stock.priceInfo.pChange.toFixed(2)}%
+                        </span>
+                    </td>
+                `;
+                losersTable.appendChild(row);
+            });
+
+            const formattedTimestamp = formatTimestamp(timestamp);
+            gainersTimestamp.textContent = `Updated: ${formattedTimestamp}`;
+            losersTimestamp.textContent = `Updated: ${formattedTimestamp}`;
+        }
+
+        // Initial load
+        fetchMarketData();
+        
+        // Event listeners
+        document.getElementById('refreshBtn').addEventListener('click', () => fetchMarketData(true));
+        document.getElementById('retryBtn').addEventListener('click', () => fetchMarketData(true));
+        
+        // Auto-refresh every 5 minutes (300000 ms)
+        setInterval(() => fetchMarketData(), 300000);
+    </script>
+</body>
+</html>
