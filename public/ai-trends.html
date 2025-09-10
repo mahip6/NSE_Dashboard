@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSE AI Trend Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            color: white;
+            backdrop-filter: blur(4px);
+        }
+        .card-hover {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .gradient-text {
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .ai-gradient {
+            background-image: linear-gradient(to right, #8b5cf6, #06b6d4, #10b981);
+        }
+        .sticky-nav {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            backdrop-filter: blur(8px);
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+        }
+        .dropdown-arrow {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.25em;
+        }
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .metric-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .leader-badge {
+            background-color: rgba(34, 197, 94, 0.1);
+            color: rgb(34, 197, 94);
+        }
+        .follower-badge {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: rgb(239, 68, 68);
+        }
+        .neutral-badge {
+            background-color: rgba(156, 163, 175, 0.1);
+            color: rgb(156, 163, 175);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans antialiased">
+    <!-- Navigation Bar -->
+    <nav class="sticky-nav bg-indigo-600/90 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center">
+                <i class="fas fa-chart-line mr-2"></i>
+                <span>NSE Dashboards</span>
+            </h1>
+            <div class="flex space-x-4">
+                <a href="/index.html" class="hover:bg-indigo-700/80 px-3 py-1.5 rounded-md transition flex items-center text-sm font-medium">
+                    <i class="fas fa-arrow-trend-up mr-1.5"></i>
+                    <span>Gainers/Losers</span>
+                </a>
+                <a href="/industry.html" class="hover:bg-indigo-700/80 px-3 py-1.5 rounded-md transition flex items-center text-sm font-medium">
+                    <i class="fas fa-industry mr-1.5"></i>
+                    <span>Industry Performance</span>
+                </a>
+                <a href="/delivery-check.html" class="hover:bg-indigo-700/80 px-3 py-1.5 rounded-md transition flex items-center text-sm font-medium">
+                    <i class="fas fa-truck mr-1.5"></i>
+                    <span>Delivery Check</span>
+                </a>
+                <a href="/ai-trends.html" class="bg-white/10 px-3 py-1.5 rounded-md text-sm font-medium flex items-center">
+                    <i class="fas fa-brain mr-1.5"></i>
+                    <span>AI Trends</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <header class="text-center mb-10 animate-fade-in">
+            <div class="inline-block bg-white rounded-xl shadow-sm px-4 py-2 mb-4">
+                <span class="text-xs font-semibold uppercase tracking-wider text-indigo-600">AI Analytics</span>
+            </div>
+            <h1 class="text-4xl font-bold text-gray-800 mb-3">NSE <span class="ai-gradient gradient-text">AI Trend Analysis</span></h1>
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto">Advanced leader-follower analysis using momentum, cross-correlation, and Granger causality tests</p>
+        </header>
+
+        <!-- Analysis Controls -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-8 shadow-sm card-hover animate-fade-in">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label for="leaderSymbol" class="block text-sm font-medium text-gray-700 mb-2">Leader Symbol</label>
+                    <input type="text" id="leaderSymbol" class="block w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm py-2.5 px-3" placeholder="e.g., NIFTY" value="NIFTY" />
+                </div>
+                <div>
+                    <label for="followerSymbol" class="block text-sm font-medium text-gray-700 mb-2">Follower Symbol</label>
+                    <input type="text" id="followerSymbol" class="block w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm py-2.5 px-3" placeholder="e.g., RELIANCE" value="RELIANCE" />
+                </div>
+                <div>
+                    <label for="timeframeSelect" class="block text-sm font-medium text-gray-700 mb-2">Analysis Period</label>
+                    <select id="timeframeSelect" class="block w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm dropdown-arrow py-2.5">
+                        <option value="1m">1 Month</option>
+                        <option value="3m" selected>3 Months</option>
+                        <option value="6m">6 Months</option>
+                        <option value="1y">1 Year</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button id="analyzeBtn" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-medium py-2.5 px-5 rounded-lg transition flex items-center justify-center shadow-md hover:shadow-lg">
+                        <span id="analyzeText">Analyze</span>
+                        <svg id="analyzeSpinner" class="animate-spin h-4 w-4 ml-2 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Container -->
+        <div id="resultsContainer" class="hidden">
+            <!-- Analysis Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8 animate-fade-in">
+                <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500">Correlation</h3>
+                            <p id="correlationValue" class="text-2xl font-bold text-gray-800 mt-1">--</p>
+                        </div>
+                        <div class="p-2 rounded-lg bg-blue-100 text-blue-600">
+                            <i class="fas fa-link"></i>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <span id="correlationBadge" class="metric-badge neutral-badge">Neutral</span>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500">Momentum Score</h3>
+                            <p id="momentumValue" class="text-2xl font-bold text-gray-800 mt-1">--</p>
+                        </div>
+                        <div class="p-2 rounded-lg bg-green-100 text-green-600">
+                            <i class="fas fa-rocket"></i>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <span id="momentumBadge" class="metric-badge neutral-badge">Neutral</span>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500">Granger P-Value</h3>
+                            <p id="grangerValue" class="text-2xl font-bold text-gray-800 mt-1">--</p>
+                        </div>
+                        <div class="p-2 rounded-lg bg-purple-100 text-purple-600">
+                            <i class="fas fa-microscope"></i>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <span id="grangerBadge" class="metric-badge neutral-badge">Not Significant</span>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500">Lead Lag (Days)</h3>
+                            <p id="leadLagValue" class="text-2xl font-bold text-gray-800 mt-1">--</p>
+                        </div>
+                        <div class="p-2 rounded-lg bg-yellow-100 text-yellow-600">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <span id="leadLagBadge" class="metric-badge neutral-badge">Synchronous</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="analysis-grid mb-8">
+                <!-- Price Comparison Chart -->
+                <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover animate-fade-in">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                            <i class="fas fa-chart-line text-indigo-600 mr-2"></i>
+                            <span>Price Comparison</span>
+                        </h2>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="priceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Cross-Correlation Chart -->
+                <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover animate-fade-in">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                            <i class="fas fa-wave-square text-purple-600 mr-2"></i>
+                            <span>Cross-Correlation</span>
+                        </h2>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="correlationChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Details -->
+            <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm animate-fade-in">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-brain text-purple-600 mr-2"></i>
+                    AI Analysis Summary
+                </h3>
+                <div id="analysisSummary" class="prose max-w-none">
+                    <p class="text-gray-600">Run an analysis to see detailed insights about the leader-follower relationship between the selected symbols.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 mb-6 animate-fade-in" role="alert">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-circle text-red-500 mt-1"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Analysis Error</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                        <p id="errorText"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="flex flex-col items-center">
+            <div class="relative">
+                <svg class="animate-spin h-12 w-12 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <i class="fas fa-brain text-white text-lg"></i>
+                </div>
+            </div>
+            <span class="mt-4 text-lg font-medium">Running AI Analysis...</span>
+            <p class="mt-2 text-sm opacity-80">Computing correlations and causality tests</p>
+        </div>
+    </div>
+
+    <footer class="bg-white border-t border-gray-200 py-6 mt-8">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>AI analysis using advanced statistical methods. Results are for educational purposes only.</p>
+            <p class="mt-1">© 2023 NSE Dashboard. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        let priceChart, correlationChart;
+
+        // Run analysis
+        async function runAnalysis() {
+            const leaderSymbol = document.getElementById('leaderSymbol').value.trim().toUpperCase();
+            const followerSymbol = document.getElementById('followerSymbol').value.trim().toUpperCase();
+            const timeframe = document.getElementById('timeframeSelect').value;
+            
+            if (!leaderSymbol || !followerSymbol) {
+                showError('Please enter both leader and follower symbols.');
+                return;
+            }
+
+            if (leaderSymbol === followerSymbol) {
+                showError('Leader and follower symbols must be different.');
+                return;
+            }
+
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            const analyzeText = document.getElementById('analyzeText');
+            const analyzeSpinner = document.getElementById('analyzeSpinner');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const errorMessage = document.getElementById('errorMessage');
+            const resultsContainer = document.getElementById('resultsContainer');
+
+            analyzeBtn.disabled = true;
+            analyzeText.textContent = 'Analyzing...';
+            analyzeSpinner.classList.remove('hidden');
+            loadingOverlay.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+            resultsContainer.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/ai-analysis?leader=${leaderSymbol}&follower=${followerSymbol}&timeframe=${timeframe}`);
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `HTTP error ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('AI analysis response:', data);
+                
+                displayResults(data);
+                resultsContainer.classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error running AI analysis:', error);
+                showError(error.message);
+            } finally {
+                analyzeBtn.disabled = false;
+                analyzeText.textContent = 'Analyze';
+                analyzeSpinner.classList.add('hidden');
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+
+        // Display analysis results
+        function displayResults(data) {
+            // Update summary cards
+            document.getElementById('correlationValue').textContent = data.correlation.toFixed(3);
+            document.getElementById('momentumValue').textContent = data.momentumScore.toFixed(2);
+            document.getElementById('grangerValue').textContent = data.grangerPValue.toFixed(4);
+            document.getElementById('leadLagValue').textContent = data.leadLag;
+
+            // Update badges
+            updateBadge('correlationBadge', getCorrelationStatus(data.correlation));
+            updateBadge('momentumBadge', getMomentumStatus(data.momentumScore));
+            updateBadge('grangerBadge', getGrangerStatus(data.grangerPValue));
+            updateBadge('leadLagBadge', getLeadLagStatus(data.leadLag));
+
+            // Create charts
+            createPriceChart(data.priceData);
+            createCorrelationChart(data.crossCorrelation);
+
+            // Update analysis summary
+            updateAnalysisSummary(data);
+        }
+
+        // Update badge styling
+        function updateBadge(elementId, status) {
+            const badge = document.getElementById(elementId);
+            badge.className = `metric-badge ${status.class}`;
+            badge.textContent = status.text;
+        }
+
+        // Get correlation status
+        function getCorrelationStatus(correlation) {
+            const abs = Math.abs(correlation);
+            if (abs >= 0.7) return { class: 'leader-badge', text: 'Strong' };
+            if (abs >= 0.3) return { class: 'neutral-badge', text: 'Moderate' };
+            return { class: 'follower-badge', text: 'Weak' };
+        }
+
+        // Get momentum status
+        function getMomentumStatus(momentum) {
+            if (momentum >= 0.6) return { class: 'leader-badge', text: 'Strong' };
+            if (momentum >= 0.3) return { class: 'neutral-badge', text: 'Moderate' };
+            return { class: 'follower-badge', text: 'Weak' };
+        }
+
+        // Get Granger status
+        function getGrangerStatus(pValue) {
+            if (pValue < 0.01) return { class: 'leader-badge', text: 'Highly Significant' };
+            if (pValue < 0.05) return { class: 'neutral-badge', text: 'Significant' };
+            return { class: 'follower-badge', text: 'Not Significant' };
+        }
+
+        // Get lead-lag status
+        function getLeadLagStatus(leadLag) {
+            if (leadLag > 0) return { class: 'leader-badge', text: `Leader by ${leadLag}d` };
+            if (leadLag < 0) return { class: 'follower-badge', text: `Lags by ${Math.abs(leadLag)}d` };
+            return { class: 'neutral-badge', text: 'Synchronous' };
+        }
+
+        // Create price comparison chart
+        function createPriceChart(priceData) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            if (priceChart) {
+                priceChart.destroy();
+            }
+
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: priceData.dates,
+                    datasets: [
+                        {
+                            label: priceData.leaderSymbol,
+                            data: priceData.leaderPrices,
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.1,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: priceData.followerSymbol,
+                            data: priceData.followerPrices,
+                            borderColor: 'rgb(16, 185, 129)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.1,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: priceData.leaderSymbol + ' Price'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: priceData.followerSymbol + ' Price'
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create cross-correlation chart
+        function createCorrelationChart(crossCorrelation) {
+            const ctx = document.getElementById('correlationChart').getContext('2d');
+            if (correlationChart) {
+                correlationChart.destroy();
+            }
+
+            correlationChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: crossCorrelation.lags,
+                    datasets: [{
+                        label: 'Cross-Correlation',
+                        data: crossCorrelation.values,
+                        backgroundColor: crossCorrelation.values.map(v => 
+                            v > 0 ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'
+                        ),
+                        borderColor: crossCorrelation.values.map(v => 
+                            v > 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'
+                        ),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            min: -1,
+                            max: 1,
+                            title: {
+                                display: true,
+                                text: 'Correlation Coefficient'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Lag (Days)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update analysis summary
+        function updateAnalysisSummary(data) {
+            const summary = document.getElementById('analysisSummary');
+            const correlation = data.correlation;
+            const momentum = data.momentumScore;
+            const granger = data.grangerPValue;
+            const leadLag = data.leadLag;
+
+            let analysis = `<div class="space-y-4">`;
+            
+            // Correlation analysis
+            analysis += `<div><h4 class="font-semibold text-gray-800 mb-2">📊 Correlation Analysis</h4>`;
+            analysis += `<p class="text-gray-600">The correlation coefficient of <strong>${correlation.toFixed(3)}</strong> indicates a `;
+            if (Math.abs(correlation) >= 0.7) analysis += `<span class="text-green-600">strong</span>`;
+            else if (Math.abs(correlation) >= 0.3) analysis += `<span class="text-yellow-600">moderate</span>`;
+            else analysis += `<span class="text-red-600">weak</span>`;
+            analysis += ` ${correlation > 0 ? 'positive' : 'negative'} relationship between ${data.leaderSymbol} and ${data.followerSymbol}.</p></div>`;
+
+            // Momentum analysis
+            analysis += `<div><h4 class="font-semibold text-gray-800 mb-2">🚀 Momentum Analysis</h4>`;
+            analysis += `<p class="text-gray-600">The momentum score of <strong>${momentum.toFixed(2)}</strong> suggests `;
+            if (momentum >= 0.6) analysis += `<span class="text-green-600">strong momentum</span> in the relationship.`;
+            else if (momentum >= 0.3) analysis += `<span class="text-yellow-600">moderate momentum</span> in the relationship.`;
+            else analysis += `<span class="text-red-600">weak momentum</span> in the relationship.`;
+            analysis += `</p></div>`;
+
+            // Granger causality
+            analysis += `<div><h4 class="font-semibold text-gray-800 mb-2">🔬 Granger Causality Test</h4>`;
+            analysis += `<p class="text-gray-600">The p-value of <strong>${granger.toFixed(4)}</strong> `;
+            if (granger < 0.01) analysis += `indicates <span class="text-green-600">highly significant</span> causal relationship.`;
+            else if (granger < 0.05) analysis += `indicates a <span class="text-yellow-600">significant</span> causal relationship.`;
+            else analysis += `suggests <span class="text-red-600">no significant</span> causal relationship.`;
+            analysis += `</p></div>`;
+
+            // Lead-lag analysis
+            analysis += `<div><h4 class="font-semibold text-gray-800 mb-2">⏰ Lead-Lag Analysis</h4>`;
+            analysis += `<p class="text-gray-600">`;
+            if (leadLag > 0) analysis += `${data.leaderSymbol} <span class="text-green-600">leads</span> ${data.followerSymbol} by approximately <strong>${leadLag} day(s)</strong>.`;
+            else if (leadLag < 0) analysis += `${data.followerSymbol} <span class="text-green-600">leads</span> ${data.leaderSymbol} by approximately <strong>${Math.abs(leadLag)} day(s)</strong>.`;
+            else analysis += `The symbols move <span class="text-yellow-600">synchronously</span> with no significant lead-lag relationship.`;
+            analysis += `</p></div>`;
+
+            analysis += `</div>`;
+            summary.innerHTML = analysis;
+        }
+
+        // Show error message
+        function showError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMessage').classList.remove('hidden');
+        }
+
+        // Event listeners
+        document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
+        
+        document.getElementById('leaderSymbol').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') runAnalysis();
+        });
+
+        document.getElementById('followerSymbol').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') runAnalysis();
+        });
+    </script>
+</body>
+</html>

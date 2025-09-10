@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSE Delivery Check Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            color: white;
+            backdrop-filter: blur(4px);
+        }
+        .card-hover {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .gradient-text {
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .delivery-gradient {
+            background-image: linear-gradient(to right, #3b82f6, #10b981, #f59e0b);
+        }
+        .sticky-nav {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            backdrop-filter: blur(8px);
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        .dropdown-arrow {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.25em;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans antialiased">
+    <!-- Navigation Bar -->
+    <nav class="sticky-nav bg-indigo-600/90 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center">
+                <i class="fas fa-chart-line mr-2"></i>
+                <span>NSE Dashboards</span>
+            </h1>
+            <div class="flex space-x-4">
+                <a href="/index.html" class="hover:bg-indigo-700/80 px-3 py-1.5 rounded-md transition flex items-center text-sm font-medium">
+                    <i class="fas fa-arrow-trend-up mr-1.5"></i>
+                    <span>Gainers/Losers</span>
+                </a>
+                <a href="/industry.html" class="hover:bg-indigo-700/80 px-3 py-1.5 rounded-md transition flex items-center text-sm font-medium">
+                    <i class="fas fa-industry mr-1.5"></i>
+                    <span>Industry Performance</span>
+                </a>
+                <a href="/delivery-check.html" class="bg-white/10 px-3 py-1.5 rounded-md text-sm font-medium flex items-center">
+                    <i class="fas fa-truck mr-1.5"></i>
+                    <span>Delivery Check</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <header class="text-center mb-10 animate-fade-in">
+            <div class="inline-block bg-white rounded-xl shadow-sm px-4 py-2 mb-4">
+                <span class="text-xs font-semibold uppercase tracking-wider text-indigo-600">Delivery Analytics</span>
+            </div>
+            <h1 class="text-4xl font-bold text-gray-800 mb-3">NSE <span class="delivery-gradient gradient-text">Delivery Check</span></h1>
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto">Check delivery percentage and trading statistics for any symbol and date</p>
+        </header>
+
+        <!-- Search Form -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-8 shadow-sm card-hover animate-fade-in">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="symbolInput" class="block text-sm font-medium text-gray-700 mb-2">Stock Symbol</label>
+                    <input type="text" id="symbolInput" class="block w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm py-2.5 px-3" placeholder="e.g., RELIANCE, TCS, INFY" />
+                </div>
+                <div>
+                    <label for="dateInput" class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                    <input type="date" id="dateInput" class="block w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 shadow-sm py-2.5 px-3" />
+                </div>
+                <div class="flex items-end">
+                    <button id="searchBtn" class="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-medium py-2.5 px-5 rounded-lg transition flex items-center justify-center shadow-md hover:shadow-lg">
+                        <span id="searchText">Search</span>
+                        <svg id="searchSpinner" class="animate-spin h-4 w-4 ml-2 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Container -->
+        <div id="resultsContainer" class="hidden">
+            <!-- Delivery Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8 animate-fade-in">
+                <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                    <div class="flex items-center">
+                        <div class="p-2 rounded-lg bg-blue-100 text-blue-600 mr-3">
+                            <i class="fas fa-percentage"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500">Delivery %</h3>
+                            <p id="deliveryPercent" class="text-lg font-semibold text-gray-800 mt-1">--</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                    <div class="flex items-center">
+                        <div class="p-2 rounded-lg bg-green-100 text-green-600 mr-3">
+                            <i class="fas fa-box"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500">Delivery Qty</h3>
+                            <p id="deliveryQty" class="text-lg font-semibold text-gray-800 mt-1">--</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                    <div class="flex items-center">
+                        <div class="p-2 rounded-lg bg-yellow-100 text-yellow-600 mr-3">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500">Traded Qty</h3>
+                            <p id="tradedQty" class="text-lg font-semibold text-gray-800 mt-1">--</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm card-hover">
+                    <div class="flex items-center">
+                        <div class="p-2 rounded-lg bg-purple-100 text-purple-600 mr-3">
+                            <i class="fas fa-rupee-sign"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500">Close Price</h3>
+                            <p id="closePrice" class="text-lg font-semibold text-gray-800 mt-1">--</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="bg-white rounded-xl border border-gray-200 p-5 mb-6 shadow-sm card-hover animate-fade-in">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                        <i class="fas fa-chart-pie text-indigo-600 mr-2"></i>
+                        <span id="chartTitle">Delivery vs Trading Volume</span>
+                    </h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="deliveryChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Historical Data Table -->
+            <div class="bg-white rounded-xl border border-gray-200 p-5 shadow-sm animate-fade-in">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                        <i class="fas fa-table text-indigo-600 mr-2"></i>
+                        <span>Recent Delivery History</span>
+                    </h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
+                                <th class="p-3 font-medium">Date</th>
+                                <th class="p-3 font-medium text-right">Close Price (₹)</th>
+                                <th class="p-3 font-medium text-right">Traded Qty</th>
+                                <th class="p-3 font-medium text-right">Delivery Qty</th>
+                                <th class="p-3 font-medium text-right">Delivery %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTable" class="text-gray-700 divide-y divide-gray-200">
+                            <!-- Data will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 mb-6 animate-fade-in" role="alert">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-circle text-red-500 mt-1"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Error</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                        <p id="errorText"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="flex flex-col items-center">
+            <div class="relative">
+                <svg class="animate-spin h-12 w-12 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <i class="fas fa-truck text-white text-lg"></i>
+                </div>
+            </div>
+            <span class="mt-4 text-lg font-medium">Fetching delivery data...</span>
+            <p class="mt-2 text-sm opacity-80">Please wait</p>
+        </div>
+    </div>
+
+    <footer class="bg-white border-t border-gray-200 py-6 mt-8">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>Delivery data provided by NSE India. Market hours: 9:15 AM–3:30 PM IST, Monday–Friday</p>
+            <p class="mt-1">© 2023 NSE Dashboard. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        let deliveryChart;
+
+        // Set default date to today
+        document.getElementById('dateInput').valueAsDate = new Date();
+
+        // Format numbers with commas
+        function formatNumber(num) {
+            return new Intl.NumberFormat('en-IN').format(num);
+        }
+
+        // Format date
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            });
+        }
+
+        // Search for delivery data
+        async function searchDeliveryData() {
+            const symbol = document.getElementById('symbolInput').value.trim().toUpperCase();
+            const date = document.getElementById('dateInput').value;
+            
+            if (!symbol || !date) {
+                showError('Please enter both symbol and date.');
+                return;
+            }
+
+            const searchBtn = document.getElementById('searchBtn');
+            const searchText = document.getElementById('searchText');
+            const searchSpinner = document.getElementById('searchSpinner');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const errorMessage = document.getElementById('errorMessage');
+            const resultsContainer = document.getElementById('resultsContainer');
+
+            searchBtn.disabled = true;
+            searchText.textContent = 'Searching...';
+            searchSpinner.classList.remove('hidden');
+            loadingOverlay.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+            resultsContainer.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/delivery-stats?symbol=${symbol}&date=${date}`);
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `HTTP error ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Delivery data response:', data);
+                
+                displayResults(data, symbol, date);
+                resultsContainer.classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error fetching delivery data:', error);
+                showError(error.message);
+            } finally {
+                searchBtn.disabled = false;
+                searchText.textContent = 'Search';
+                searchSpinner.classList.add('hidden');
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+
+        // Display results
+        function displayResults(data, symbol, date) {
+            // Update stats cards
+            document.getElementById('deliveryPercent').textContent = 
+                data.deliveryPercentage ? `${data.deliveryPercentage.toFixed(2)}%` : 'N/A';
+            document.getElementById('deliveryQty').textContent = 
+                data.deliveryQuantity ? formatNumber(data.deliveryQuantity) : 'N/A';
+            document.getElementById('tradedQty').textContent = 
+                data.tradedQuantity ? formatNumber(data.tradedQuantity) : 'N/A';
+            document.getElementById('closePrice').textContent = 
+                data.closePrice ? `₹${data.closePrice.toFixed(2)}` : 'N/A';
+
+            // Update chart title
+            document.getElementById('chartTitle').textContent = `${symbol} - Delivery Analysis (${formatDate(date)})`;
+
+            // Create chart
+            createDeliveryChart(data);
+
+            // Populate history table
+            populateHistoryTable(data.history || []);
+        }
+
+        // Create delivery chart
+        function createDeliveryChart(data) {
+            const ctx = document.getElementById('deliveryChart').getContext('2d');
+            if (deliveryChart) {
+                deliveryChart.destroy();
+            }
+
+            const deliveredQty = data.deliveryQuantity || 0;
+            const tradedQty = data.tradedQuantity || 0;
+            const nonDeliveredQty = Math.max(0, tradedQty - deliveredQty);
+
+            deliveryChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Delivered', 'Non-Delivered'],
+                    datasets: [{
+                        data: [deliveredQty, nonDeliveredQty],
+                        backgroundColor: [
+                            'rgba(34, 197, 94, 0.8)',
+                            'rgba(239, 68, 68, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(34, 197, 94, 1)',
+                            'rgba(239, 68, 68, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed;
+                                    const total = deliveredQty + nonDeliveredQty;
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(2) : 0;
+                                    return `${context.label}: ${formatNumber(value)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Populate history table
+        function populateHistoryTable(history) {
+            const tbody = document.getElementById('historyTable');
+            tbody.innerHTML = '';
+
+            if (!history || history.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = '<td colspan="5" class="p-3 text-center text-gray-500">No historical data available</td>';
+                tbody.appendChild(row);
+                return;
+            }
+
+            history.forEach(record => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition';
+                
+                const deliveryPercent = record.tradedQuantity > 0 
+                    ? ((record.deliveryQuantity / record.tradedQuantity) * 100).toFixed(2)
+                    : 0;
+
+                row.innerHTML = `
+                    <td class="p-3 font-medium">${formatDate(record.date)}</td>
+                    <td class="p-3 text-right">₹${record.closePrice ? record.closePrice.toFixed(2) : 'N/A'}</td>
+                    <td class="p-3 text-right">${formatNumber(record.tradedQuantity || 0)}</td>
+                    <td class="p-3 text-right">${formatNumber(record.deliveryQuantity || 0)}</td>
+                    <td class="p-3 text-right font-medium ${deliveryPercent >= 50 ? 'text-green-600' : 'text-red-600'}">
+                        ${deliveryPercent}%
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Show error message
+        function showError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMessage').classList.remove('hidden');
+        }
+
+        // Event listeners
+        document.getElementById('searchBtn').addEventListener('click', searchDeliveryData);
+        
+        document.getElementById('symbolInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                searchDeliveryData();
+            }
+        });
+
+        document.getElementById('dateInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                searchDeliveryData();
+            }
+        });
+    </script>
+</body>
+</html>
